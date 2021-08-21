@@ -1,0 +1,1092 @@
+---
+title: "david_corrected"
+author: "Kamil"
+date: "6/9/2021"
+output: html_document
+---
+
+
+
+```{r Libraries, warning = F, message = F}
+library(lfe)
+library(estimatr)
+library(stargazer)
+library(haven)
+library(foreign)
+library(pastecs)
+library(doBy)
+library(psych)
+library(statar)
+library(collapse)
+library(texreg)
+library(xtable)
+library(plm)
+library(tidyverse)
+
+```
+
+
+```{r Initialize}
+
+##STATA to R conversion code
+rm(list=ls())
+
+##Load libraries (stargazer to make tables,
+#haven and foreign to load stata, pastecs and doby for summary stats)
+
+
+##Make a function to change data to a normal distribution (only works on numeric cols
+## and not character cols)
+
+
+##rnorm generates (nrow) obs which are normally
+## dist with mean 250 sd 10 (chosen at random by me)
+
+##I randomized the data as the original numbers
+##were too large to fit into summary stats tables 
+
+
+randomize_large_values <- function(x){
+  if(is.numeric(x) == T){
+    ifelse(x > 10000, rnorm(n = nrow(my_data), mean = 100, sd = 5), x)
+  }  else{
+    x
+  }
+}
+
+setwd("C:/Users/kamil/Desktop/David")
+##Read the data
+my_data <- read_dta("dataforregression_mock.dta")
+
+set.seed(123)
+##I have randomized all numeric columns to make the numbers smaller
+##(randomized by using normal distribution)
+
+my_data[,c(2:48)] <- sapply(my_data[,c(2:48)], randomize_large_values)
+
+##Make a function to compute mean, sd and percentiles
+function_stats <- function(x){
+  c(Mean = mean(x), SD = sd(x), P = quantile(x))
+}
+
+##bage bincome btenure badbchecking hastdc binterest bsaldotdc bcreditlimit
+
+```
+
+
+```{r Table 1.1 and 1.2}
+t1data <- my_data[,c(23,24,25,26,27,28,31,34)]
+
+t1data[,c(1:8)] <- sapply(t1data[,c(1:8)], as.numeric)
+
+##Make summary stats table (Table 1)
+table_1.1 <- sapply(t1data[,c(1:8)], function_stats)
+
+##Extract relevant observations and transpose
+table_1.1 <- t(table_1.1[-c(3,7),])
+
+##Export to LaTeX format 
+stargazer(table_1.1, type = "latex", title = "Descriptive Statistics"
+          ,digits = 2, out = "R Tables/sumstat.TeX")
+
+
+##Make table 1.2, which has hastdc == 1 
+t1.2data <- subset(t1data, hastdc == 1)
+
+
+table_1.2 <- sapply(t1.2data[,c(1:8)], function_stats)
+
+
+table_1.2 <- t(table_1.2[-c(3,7),])
+
+empty_row <- c(NA, NA, NA, NA, NA)
+
+table_1 <- rbind.data.frame(table_1.1, empty_row, table_1.2)
+
+rownames(table_1) <- c("Has Credit Card", "Age (Years)", "Monthly Income", "Tenure (Years)", "Checking Account Balance", "Credit Card Interest", "Credit Card Balance", "Credit Card Limit", "Individuals with Credit Cards", "Has Credit  Card","Age  (Years)", "Monthly  Income", "Tenure  (Years)", "Checking  Account  Balance",  "Credit Card  Interest", "Credit Card  Balance", "Credit Card  Limit")
+
+table_1 <- as.matrix(table_1)
+
+stargazer(table_1, type = "latex", title = "Descriptive Statistics"
+          ,digits = 2, out = "R Tables/sumstathastdc.TeX")
+
+
+```
+
+
+
+```{r Tables 1.3 to 1.6}
+## Make table 1.3 estpost tabstat bage bincome btenure 
+## badbchecking binterest bsaldotdc
+## bcreditlimit if hastdc==1 & binterest>0 & binterest!=.,
+
+t1.3data <- subset(t1data, hastdc == 1 & binterest > 0.001 & is.na(as.numeric(binterest)) != T )
+
+table_1.3 <- sapply(t1.3data[,c(1:8)], function_stats)
+
+
+table_1.3 <- t(table_1.3[-c(3,7),])
+
+row.names(table_1.3) <- c("Has Credit Card", "Age (Years)", "Monthly Income", "Tenure (Years)", "Checking Account Balance", "Credit Card Interest", "Credit Card Balance", "Credit Card Limit")
+
+stargazer(table_1.3, type = "latex", title = "Credit card and has interest"
+          ,digits = 2, out = "R Tables/sumstathas_ccinterest.tex")
+
+
+## Table 1.4 bage bincome btenure badbchecking binterest 
+## bsaldotdc bcreditlimit if badbchecking>=15000 
+
+
+t1.4data <- subset(t1data, hastdc == 1 & binterest > 0 & is.na(as.numeric(binterest)) != T)
+
+table_1.4 <- sapply(t1.4data[,c(1:8)], function_stats)
+
+
+table_1.4 <- t(table_1.4[-c(3,7),])
+
+row.names(table_1.4) <- c("Has Credit Card", "Age (Years)", "Monthly Income", "Tenure (Years)", "Checking Account Balance", "Credit Card Interest", "Credit Card Balance", "Credit Card Limit")
+
+
+stargazer(table_1.4, type = "latex", title = "Descriptive Statistics top quartile"
+          ,digits = 2, out = "R Tables/sumstattopq.tex")
+
+
+##Table 1.5 badbchecking>=15000& hastdc==1
+
+t1.5data <- subset(t1data,  badbchecking >= 15000 & hastdc == 1)
+
+table_1.5 <- sapply(t1.5data[,c(1:8)], function_stats)
+
+
+table_1.5 <- t(table_1.5[-c(3,7),])
+row.names(table_1.5) <- c("Has Credit Card", "Age (Years)", "Monthly Income", "Tenure (Years)", "Checking Account Balance", "Credit Card Interest", "Credit Card Balance", "Credit Card Limit")
+
+stargazer(table_1.5, type = "latex", 
+          title = "Descriptive Statistics credit card top quartile"
+          ,digits = 2, out = "R Tables/sumstattopq_withCC.tex")
+
+
+##Table 1.6 if badbchecking>=15000 & hastdc==1 & binterest>0 & binterest!=.,
+
+t1.6data <- subset(t1data,  badbchecking >= 15000 & hastdc == 1
+                   & binterest>0 & is.na(binterest))
+
+table_1.6 <- sapply(t1.6data[,c(1:8)], function_stats)
+
+
+table_1.6 <- t(table_1.6[-c(3,7),])
+row.names(table_1.6) <- c("Has Credit Card", "Age (Years)", "Monthly Income", "Tenure (Years)", "Checking Account Balance", "Credit Card Interest", "Credit Card Balance", "Credit Card Limit")
+stargazer(table_1.6, type = "latex", 
+          title = "Descriptive Statistics top q and interest"
+          ,digits = 2, out = "R Tables/sumstattopq_withCCInterest.tex")
+
+
+```
+
+
+```{r Table 2}
+
+# Table 2
+
+mean_bage <- mean(as.numeric(my_data$bage))
+
+stargazer(mean_bage, type = "text",
+                title = "Mean Age",
+                out = "R Tables/mean_textresults.txt")
+
+# bage bincome btenure badbchecking hastdc
+# binterest bsaldotdc bcreditlimit =y
+# trat = x
+
+
+model_2.1 <- felm(bage ~ trat | as.factor(strata), 
+                       data = my_data)
+                       
+#intercept, intercept + slope, slope, std error of x 
+
+summary(model_2.1)$coefficients[1,1]
+
+getfe(model_2.1, ef='zm2')[11,1]
+
+bage <- c(getfe(model_2.1, ef='zm2')[11,1], getfe(model_2.1, ef='zm2')[11,1] + summary(model_2.1)$coefficients[1,1], summary(model_2.1)$coefficients[1,1], summary(model_2.1)$coefficients[1,2])
+
+
+##2.2
+model_2.2 <- felm(bincome ~ trat | as.factor(strata) , 
+                       data = my_data )
+bincome <- c(getfe(model_2.2, ef='zm2')[11,1], getfe(model_2.2, ef='zm2')[11,1] + summary(model_2.2)$coefficients[1,1], summary(model_2.2)$coefficients[1,1], summary(model_2.2)$coefficients[1,2])
+
+##2.3
+model_2.3 <- felm(btenure ~ trat  | as.factor(strata) , 
+                       data = my_data )
+btenure <- c(getfe(model_2.3, ef='zm2')[11,1], getfe(model_2.3, ef='zm2')[11,1] + summary(model_2.3)$coefficients[1,1], summary(model_2.3)$coefficients[1,1], summary(model_2.3)$coefficients[1,2])
+
+##2.4
+model_2.4 <- felm(badbchecking ~ trat  | as.factor(strata) , 
+                       data = my_data )
+badbchecking <- c(getfe(model_2.4, ef='zm2')[11,1], getfe(model_2.4, ef='zm2')[11,1] + summary(model_2.4)$coefficients[1,1], summary(model_2.4)$coefficients[1,1], summary(model_2.4)$coefficients[1,2])
+
+##2.5
+model_2.5 <- felm(hastdc ~ trat | as.factor(strata), 
+                       data = my_data )
+hastdc <- c(getfe(model_2.5, ef='zm2')[11,1], getfe(model_2.5, ef='zm2')[11,1] + summary(model_2.5)$coefficients[1,1], summary(model_2.5)$coefficients[1,1], summary(model_2.5)$coefficients[1,2])
+
+
+##2.6
+model_2.6 <- felm(binterest ~ trat | as.factor(strata), 
+                       data = my_data )
+binterest <- c(getfe(model_2.6, ef='zm2')[11,1], getfe(model_2.6, ef='zm2')[11,1] + summary(model_2.6)$coefficients[1,1], summary(model_2.6)$coefficients[1,1], summary(model_2.6)$coefficients[1,2])
+
+
+##2.7
+model_2.7 <- felm(bsaldotdc ~ trat  | as.factor(strata), 
+                       data = my_data)
+bsaldotdc <- c(getfe(model_2.7, ef='zm2')[11,1], getfe(model_2.7, ef='zm2')[11,1] + summary(model_2.7)$coefficients[1,1], summary(model_2.7)$coefficients[1,1], summary(model_2.7)$coefficients[1,2])
+
+
+##2.8 
+model_2.8 <- felm(bcreditlimit ~ trat | as.factor(strata), 
+                       data = my_data )
+bcreditlimit <- c(getfe(model_2.8, ef='zm2')[11,1], getfe(model_2.8, ef='zm2')[11,1] + summary(model_2.8)$coefficients[1,1], summary(model_2.8)$coefficients[1,1], summary(model_2.8)$coefficients[1,2])
+
+final_table_2 <- as.data.frame(rbind(bage, bincome, btenure,
+                                  badbchecking, hastdc, binterest
+                                  ,bsaldotdc ,bcreditlimit))
+
+
+final_table_2 <- rename(final_table_2, "Control" = V1)
+final_table_2 <- rename(final_table_2, "Treatment" = V2)
+final_table_2 <- rename(final_table_2, "Difference" = V3)
+final_table_2 <- rename(final_table_2, "Std. Error of Difference" = V4)
+
+row.names(final_table_2) <- c("Age (Years)", "Monthly Income", "Tenure (Years)", "Checking Account Balance", "Has Credit Card", "Credit Card Interest", "Credit Card Balance", "Credit Card Limit")
+
+final_table_2 <- as.matrix(final_table_2)
+
+stargazer(final_table_2, summary = NULL,type = "latex", 
+          title = "Table 2: Covariate Balanace", out = "R Tables/Table 2.TeX")
+
+################### SPACE FOR SECOND PART OF TABLE 2 (OMNI-VARS and F-TEST)
+
+
+##FROM DR. DAVID'S MESSAGE : run the regression "areg trat bage bincome btenure badbchecking hastdc binterest bsaldotdc bcreditlimit, abs(strata) robust" and save the "f-statistic(proj model)" as a value in the environment
+
+table_2_jointtest_model <- felm(trat ~  as.numeric(bage) + as.numeric(bincome) + 
+                          as.numeric(btenure) +
+                            as.numeric(badbchecking) +
+                          as.factor(hastdc) + as.numeric(binterest) + 
+                            as.numeric(bsaldotdc) + 
+                           as.numeric(bcreditlimit) | as.factor(strata),
+                          data = my_data)
+
+table_2_fstat <- summary(table_2_jointtest_model)$fstat
+##THIS IS SAVED HERE
+
+
+```
+
+
+```{r Table 3 }
+###TABLE 3
+
+#gen savingsoverincome = sdoprom_vista_t1/ing_mensual
+#sum savingsoverincome, det
+#winsor2 savingsoverincome, c(1 99) replace
+#xtile decsavincome = savingsoverincome, nq(10)
+
+my_data$savingsoverincome = as.numeric(my_data$sdoprom_vista_t1)/
+as.numeric(my_data$ing_mensual)
+
+my_data$savingsoverincome <- winsorize(my_data$savingsoverincome,
+probs = c(0.01, 0.99))
+
+my_data$decsavincome = dplyr::ntile(my_data$savingsoverincome, n = 10)
+
+#my_data$sdo_cierre_tdc_1 <- as.numeric(my_data$sdo_cierre_tdc_1)
+
+my_data$hasccdebt = ifelse(my_data$sdo_cierre_tdc_1 > 0, 1, 0)
+
+my_data$hasint = ifelse(my_data$int_t1 > 0, 1, 0)
+
+data_table3.1 <- subset(my_data, hastdc == 1)
+
+data_table3.1[,c(11:13)] <- sapply(data_table3.1[,c(11:13)], as.numeric)
+
+means_3.1 <- data.frame(collap(data_table3.1, savingsoverincome +
+hasccdebt + hasint ~ decsavincome , FUN = list(fmean)))
+
+means_3.1 <- cbind(means_3.1, dplyr::count(data_table3.1, decsavincome)[,2])
+
+means_3.1 <- means_3.1[,c(2,5,1,3,4)]
+
+##Repeat above process but for individuals with credit cards and paying interest
+data_table3.2 <- subset(my_data, hastdc == 1)
+
+data_table3.2$decsavincome = dplyr::ntile(data_table3.2$savingsoverincome, n = 10)
+
+data_table3.2 <- subset(data_table3.2, hasint == 1)
+
+##Find decile means for savings over income using collapse
+
+means_3.2 <- collap(data_table3.2,
+badbchecking + bsaldotdc + binterest
+~ decsavincome , FUN = list(fmean))
+
+means_3.2 <- cbind(means_3.2, dplyr::count(data_table3.2, decsavincome)[,2])
+
+means_3.2 <- means_3.2[,c(5,1,2,3,4)]
+
+table_3 <- inner_join(means_3.1, means_3.2, by = "decsavincome")
+
+colnames(table_3) <- c("Decile", "N", "Checking Account Balance over Income", "Fraction of Clients with Non-Zero Credit Card Balance", "Fraction of Clients Paying Credit Card Interest", "N2", "Checking Account Balances (Average)", "Credit Card Balances (Average)", "Credit Card Interest (Average)")
+
+table_3 <- as.matrix(table_3)
+
+stargazer(table_3, type = "latex",
+          title = "All Clients with Credit Card Clients Paying Credit Card Interest")
+
+```
+
+
+
+```{r Table 4 }
+##Table 4
+# bage bincome btenure badbchecking hastdc
+# binterest bsaldotdc bcreditlimit =y
+# puzzle = x
+my_data$puzzle = ifelse(my_data$savingsoverincome >= .5 
+                        & my_data$hasint==1 & my_data$hastdc==1, 1, 0)
+names(my_data)
+xvars <- my_data[, c(23,24,25,26,27,28,31,34)] 
+# separate out the x and y column for this analysis
+
+yvar <- my_data[, 53]
+
+out <- apply(xvars, 2, function(current_col){
+  
+  lm.out <- broom::tidy(lm(current_col ~ yvar$puzzle))
+  
+})
+
+table_4.1 <- dplyr::bind_rows(out)
+
+constants_4 <- table_4.1[seq(1, nrow(table_4.1), 2), ]
+constants_4 <- constants_4[,c(2)]
+constants_4$number <- 1:nrow(constants_4)
+
+slopes_4 <- table_4.1[seq(2, nrow(table_4.1), 2), ]
+slopes_4 <- slopes_4[,c(1:3)]
+slopes_4$number <- 1:nrow(slopes_4)
+
+final_table4 <- inner_join(constants_4, slopes_4, by = "number")
+
+colnames <- c("hastdc", "bage", "bincome", "btenure", "badbchecking",
+              "binterest", "bsaldotdc", "bcreditlimit")
+
+final_table4$term <- colnames
+
+final_table4 <- final_table4[,c(3,1,2,4,5)]
+
+final_table4$number <- NULL
+
+final_table4$treat <- final_table4$estimate.x + final_table4$estimate.y
+
+final_table4 <- rename(final_table4, "Constant" = estimate.x)
+
+final_table4 <- rename(final_table4, "Treatment" = estimate.y)
+
+final_table4 <- rename(final_table4, "Slope" = treat)
+
+final_table4 <- as.matrix(final_table4)
+
+final_table4[1,1] <- "Has Credit Card"
+final_table4[2,1] <- "Age (Years)"
+final_table4[3,1] <- "Monthly Income"
+final_table4[4,1] <- "Tenure (Years)"
+final_table4[5,1] <- "Checking Account Balance"
+final_table4[6,1] <- "Credit Card Interest"
+final_table4[7,1] <- "Credit Card Balance"
+final_table4[8,1] <- "Credit Card Limit"
+
+stargazer(final_table4, type = "latex", out = "R Tables/Table4.TeX")
+
+######################LAST ROW OF TABLE 4##############
+
+my_data$h_int1 = ifelse(my_data$int_t1 > 0 & is.na(my_data$int_t1) != T, 1, 0)
+my_data$h_int2 = ifelse(my_data$int_t2 > 0 & is.na(my_data$int_t2) != T, 1, 0)
+my_data$h_int3 = ifelse(my_data$int_t3 > 0 & is.na(my_data$int_t3) != T, 1, 0)
+my_data$h_int4 = ifelse(my_data$int_t4 > 0 & is.na(my_data$int_t4) != T, 1, 0)
+my_data$h_int5 = ifelse(my_data$int_t5 > 0 & is.na(my_data$int_t5) != T, 1, 0)
+my_data$h_int6 = ifelse(my_data$int_t6 > 0 & is.na(my_data$int_t6) != T, 1, 0)
+
+
+my_data$upuzzle <- ifelse(my_data$puzzle == max(my_data$puzzle), 1, 0)
+
+library(reshape2)
+##keep randomid  int*   bint*   has* puzzle
+
+table_4last <- as.data.frame(subset(my_data, hastdc == 1))
+names(table_4last)
+table_4last[,-c(1,4,5,13:18,28,52,51,23, 53:60)] <- NULL
+
+table_4last <- reshape(table_4last, idvar = "randomid",
+      varying = c("int_t1", "int_t2","int_t3", "int_t4", "int_t5","int_t6",
+                  "h_int1", "h_int2","h_int3", "h_int4", "h_int5","h_int6"),
+      v.names = c("int_t", "h_int"),  direction = "long")
+
+table_4last <- table_4last[order(table_4last$randomid),]
+
+table_4last$lag_h_int <- lag(table_4last$h_int)
+
+table_4last <- subset(table_4last, lag_h_int == 1)
+
+#LINE 411
+modelt4 <- lm_robust(h_int ~ upuzzle, data = table_4last, 
+                     clusters = randomid)
+summary(modelt4)
+
+table_4lastrow <- rbind(c("P(Interest_t > 0, Interest_t-1 >0", modelt4$coefficients[1], 
+                          modelt4$coefficients[1] + modelt4$coefficients[2],
+                          modelt4$coefficients[2], 0))
+
+table_4_complete <- as.matrix(rbind(final_table4, table_4lastrow))
+
+stargazer(table_4_complete, title = "Puzzle", out = "R Tables/Table4final")
+
+######################LAST ROW OF TABLE 4##############
+
+##Figure 5
+
+my_data$quartile = dplyr::ntile(my_data$predictions_vista, n = 4)
+
+hist(my_data$quartile, freq = FALSE, col = "dark blue")
+
+```
+
+```{r Table 5 to 13}
+##TABLE 5
+my_data$vista_log <- as.numeric(my_data$vista_log)
+my_data$vista <- as.numeric(my_data$vista)
+
+
+
+my_data$vista_log <- winsorize(my_data$vista_log, 
+                                         probs = c(0.01, 0.99))
+
+my_data$vista <- winsorize(my_data$vista, 
+                             probs = c(0.01, 0.99))
+ 
+model5.1 <- felm(vista_log ~ as.factor(trat) | as.factor(strata), 
+                      data = my_data)
+
+model5.2 <- felm(vista_log ~ as.factor(msj) | as.factor(strata), 
+                      data = my_data)
+
+model5.3 <- felm(vista_log ~ as.factor(periodicidad) | as.factor(strata),
+                      data = my_data)
+
+model_5.4data <- subset(my_data, hastdc == 1)
+
+
+model5.4 <- felm(vista_log ~ as.factor(trat) | as.factor(strata),
+                      data = model_5.4data)
+
+model_5.5data <- subset(my_data, hastdc == 1)
+model_5.5data$int_log <- as.numeric(model_5.5data$int_log)
+model_5.5data$intereses <- as.numeric(model_5.5data$intereses)
+model_5.5data$int_log <- winsorize(model_5.5data$int_log, 
+                                   probs = c(0.01, 0.09))
+model_5.5data$intereses <- winsorize(model_5.5data$intereses, 
+                                     probs = c(0.01, 0.09))
+
+model5.5 <- felm(int_log ~ as.factor(trat) | as.factor(strata),
+                      data = model_5.5data)
+
+#stargazer(model5.1, model5.2, model5.3, model5.4, model5.5, title = "Table 5",
+          #out = "R Tables/itt.tex")
+            
+texreg(list(model5.1, model5.2, model5.3, model5.4, model5.5), dcolumn = T,
+              file = "R Tables/Table5.tex") 
+
+
+
+summary(model5.1)$coefficient[1,1]
+
+model5.2$coefficients[2,1]
+
+Model1 <- c(summary(model5.1)$coefficient[1,1], "", "", "","", "", "","", "", "")
+
+length(Model1)
+
+Model2 <- c("",summary(model5.2)$coefficient[1,1],
+            summary(model5.2)$coefficient[2,1],
+            summary(model5.2)$coefficient[3,1],
+            summary(model5.2)$coefficient[4,1],
+            summary(model5.2)$coefficient[5,1],
+            summary(model5.2)$coefficient[6,1],
+            summary(model5.2)$coefficient[7,1], "", "")
+
+Model3 <- c("", "", "","", "", "","", "", summary(model5.3)$coefficient[1,1],
+            summary(model5.3)$coefficient[2,1])
+
+Model4 <- c(summary(model5.4)$coefficient[1,1], "",  "","", "", "","", "", "", "")
+
+Model5 <- c(summary(model5.5)$coefficient[1,1], "", "","", "", "","", "", "", "")
+
+table_5 <- cbind(Model1, Model2, Model3, Model4, Model5)
+
+Mean_depvar <- c(mean(my_data$vista_log), mean(my_data$vista_log),
+                 mean(my_data$vista_log), mean(model_5.4data$vista_log),
+                 mean(model_5.5data$int_log))
+
+Observations <- c(nrow(my_data), nrow(my_data),
+                  nrow(my_data), nrow(model_5.4data)
+                  , nrow(model_5.5data))
+
+table_5 <- rbind(table_5, Observations, Mean_depvar)
+
+
+rownames(table_5) <- c("Any Treatment", "Msg1", "Msg2", "Msg3", "Msg4", "Msg5", 
+                       "Msg6", "Msg7", "Bi-weekly", "Weekly", "Observations",
+                       "Mean of Dependent Variable")
+
+colnames(table_5) <- c("(1) Log of Checking Acct. Balance + 1", " (2) Log of Checking Acct. Balance + 1", "(3) Log of Checking Acct. Balance + 1", "(4) Log of Checking Acct. Balance + 1", "(5) Log of Credit Card Interest + 1")
+
+
+table_5 <- as.matrix(table_5)
+
+stargazer(table_5, type = "latex", title = "Overall Treatment Effect of the
+          Intervention", single.row = FALSE, column.sep.width = "1pt" ,out = "R 
+          Tables/Table_5_edited.TeX")
+
+############# TABLE 6
+
+
+my_data$ventil <- ntile(my_data$predictions_vista, n = 20)
+
+my_data$top <- ifelse(my_data$ventil >= 16, 1, my_data$ventil)
+
+my_data$top <- ifelse(my_data$ventil <= 5, 0, my_data$top)
+
+my_data$top <- ifelse(my_data$top != 1 & my_data$top != 0, ".", my_data$top)
+
+# bage bincome btenure badbchecking hastdc
+# binterest bsaldotdc bcreditlimit = y
+# top = x
+data_t6 <- subset(my_data, top == 1| top == 0)
+
+View(data_t6$top)
+xvars <- data_t6[, c(23,24,25,26,27,28,31,34)] 
+# separate out the x and y column for this analysis
+
+yvar <- data_t6$top
+
+out <- apply(xvars, 2, function(current_col){
+  
+  lm.out <- broom::tidy(lm(current_col ~ yvar))
+  
+})
+
+table_6.1 <- dplyr::bind_rows(out)
+
+constants_6 <- table_6.1[seq(1, nrow(table_6.1), 2), ]
+constants_6 <- constants_6[,c(2)]
+constants_6$number <- 1:nrow(constants_6)
+
+slopes_6 <- table_6.1[seq(2, nrow(table_6.1), 2), ]
+slopes_6 <- slopes_6[,c(1:3)]
+slopes_6$number <- 1:nrow(slopes_6)
+
+final_table6 <- inner_join(constants_6, slopes_6, by = "number")
+
+colnames <- c(c("Age (Years)", "Monthly Income", "Tenure (Years)", "Checking Account Balance", "Has Credit Card", "Credit Card Interest", "Credit Card Balance", "Credit Card Limit"))
+
+final_table6$term <- colnames
+
+final_table6 <- final_table6[,c(3,1,2,4,5)]
+
+final_table6$number <- NULL
+
+final_table6$treat <- final_table6$estimate.x + final_table6$estimate.y
+
+final_table6 <- rename(final_table6, "Constant" = estimate.x)
+
+final_table6 <- rename(final_table6, "Treatment" = estimate.y)
+
+final_table6 <- rename(final_table6, "Slope" = treat)
+
+final_table6 <- as.matrix(final_table6)
+
+stargazer(final_table6, type = "latex", 
+          title = "Regressing Variables on Top", out = "R Tables/Table6.TeX")
+
+
+##########TABLE 12
+
+# cuartiles_sdo_vista cuartiles_edad cuartiles_ingreso 
+# mediana_antiguedad rango_txn_atm rango_txn_tdd = x
+# y = vista_log
+
+table(my_data$rango_txn_tdd)
+
+#40, 41, 42, 43, 44, 46
+my_data <- read_dta("dataforregression_mock.dta")
+
+#winsorize vista_log 
+
+my_data$vista_log <- as.numeric(my_data$vista_log)
+my_data$vista <- as.numeric(my_data$vista)
+
+
+my_data$vista_log <- winsorise(my_data$vista_log, probs = c(0.01,0.99))
+my_data$vista <- winsorize(my_data$vista, 
+                           probs = c(0.01,0.99))
+
+
+
+data_t12 <- my_data
+  
+xvars <- data_t12[, c(40, 41, 42, 43, 44, 46)] 
+# separate out the x and y column for this analysis
+
+yvar <- data_t12$vista_log
+
+out <- apply(xvars, 2, function(current_col){
+  
+  lm.out <- broom::tidy(lm(my_data$vista_log ~ current_col*my_data$trat))
+  
+})
+
+
+
+
+my_data$cuartiles_sdo_vista <- ifelse(my_data$cuartiles_sdo_vista == "$1,407 a 4,247", 1, 
+                                      ifelse(my_data$cuartiles_sdo_vista == "$100 a 1,407", 2, 
+                                 ifelse(my_data$cuartiles_sdo_vista == "$4,247 a 15,001 ", 3,
+                                  ifelse(my_data$cuartiles_sdo_vista == "15,001+ ", 4, 0))))
+
+my_data$cuartiles_edad <- ifelse(my_data$cuartiles_edad == "18 a 33", 1, 
+                ifelse(my_data$cuartiles_edad == "33 a 44", 2, 
+                ifelse(my_data$cuartiles_edad == "44 a 57", 3,
+                ifelse(my_data$cuartiles_edad == "57+", 4, 0))))
+
+my_data$cuartiles_ingreso <- ifelse(my_data$cuartiles_ingreso == "0 a 6,540", 1, 
+                    ifelse(my_data$cuartiles_ingreso == "10,598 a 16,680", 2, 
+                    ifelse(my_data$cuartiles_ingreso == "16,680-83.5M", 3,
+                    ifelse(my_data$cuartiles_ingreso == "6,540 a 10,598", 4, 0))))
+
+my_data$mediana_antiguedad <- ifelse(my_data$mediana_antiguedad == "0 a 62M", 1, 
+             ifelse(my_data$mediana_antiguedad == "62M a 689M", 2, 0))
+
+my_data$rango_txn_atm <- ifelse(my_data$rango_txn_atm == "0 a 5TXN", 1, 
+                                ifelse(my_data$rango_txn_atm == "5+ TXN", 2, 0))
+
+my_data$rango_txn_tdd <- ifelse(my_data$rango_txn_tdd == "0 a 1TXN", 1,
+                              ifelse(my_data$rango_txn_tdd == "1 a 6TXN", 2,
+                              ifelse(my_data$rango_txn_tdd == "Mas de 6TXN", 3, 0)))
+
+
+model12.1 <- felm(vista_log ~ as.factor(cuartiles_sdo_vista)*as.factor(trat) |
+                    as.factor(strata),  
+                       data = my_data )
+
+
+model12.2 <- felm(vista_log ~ as.factor(cuartiles_edad)*as.factor(trat)  
+                      | as.factor(strata),  
+                       data = my_data )
+
+model12.3 <- felm(vista_log ~ as.factor(cuartiles_ingreso)*as.factor(trat)|
+                    as.factor(strata),  
+                       data = my_data)
+
+model12.4 <- felm(vista_log ~ as.factor(mediana_antiguedad)*as.factor(trat)|
+                    as.factor(strata), 
+                       data = my_data)
+
+model12.5 <- felm(vista_log ~ as.factor(rango_txn_atm)*as.factor(trat)|
+                    as.factor(strata), 
+                       data = my_data)
+
+model12.6 <- felm(vista_log ~ (rango_txn_tdd)*as.factor(trat)|
+                    as.factor(strata),
+                       data = my_data)
+
+model12.7 <- felm(vista_log ~ as.factor(bancoprincipal)*as.factor(trat)|
+                    as.factor(strata),
+                       data = my_data)
+
+model12.8 <- felm(vista_log ~ as.factor(cash_less)*as.factor(trat)|
+                    as.factor(strata),
+                       data = my_data)
+
+model12.9 <- felm(vista_log ~ as.factor(hastdc)*as.factor(trat)|
+                    as.factor(strata),
+                       data = my_data)
+
+
+c1 <- c(model12.1$coefficients[3:5,1], " ")
+c2 <- model12.2$coefficients[4:7,1]
+c3 <- model12.3$coefficients[4:7,1]
+c4 <- c(model12.4$coefficients[2:3,1], " ", " ") 
+c5 <- c(model12.5$coefficients[2,1], "", model12.5$coefficients[3,1], " ")
+c6 <- c(model12.6$coefficients[2,1], "", model12.6$coefficients[3,1], " ")
+c7 <- c(model12.7$coefficients[2,1], "", model12.7$coefficients[3,1], " ")
+c8 <- c(model12.8$coefficients[2,1], "", model12.8$coefficients[3,1], " ")
+c9 <- c(model12.9$coefficients[2,1], "", model12.9$coefficients[3,1], " ")
+
+grpdefine <- c("Quartiles of Checking Acct. Balance", "Quartiles of Income", "Quartiles of Age", "Median of Tenure with Banorte", "Median of ATM Withdrawals", "Median of Debit Card Transactions", "Is Digital?", "Main Bank?", "Has Credit Card?")
+
+
+table_12_final <- cbind(c1, c2, c3, c4, c5, c6, c7, c8, c9)
+table_12_final <- rbind(table_12_final, grpdefine)
+
+colnames(table_12_final) <- c("(1)", "(2)", "(3)", "(4)", "(5)", "(6)", 
+                              "(7)", "(8)", "(9)")
+
+rownames(table_12_final) <- c("Any Treatment", "Any Treatment*Group2",
+                              "Any Treatment*Group3", "Any Treatment*Group4", 
+                              "Group Definition")
+
+stargazer(table_12_final, type = "latex", 
+          title = "Heterogeneous Treatment Effects by Experimental Strata", 
+          out = "R Tables/T12.TeX")
+
+
+##########TABLE 13 
+
+
+
+data_table_13 <- subset(my_data, cuartiles_sdo_vista == 4 | hastdc == 1)
+
+model_13.1 <- felm(vista_log ~ trat | as.factor(strata),
+                        data = data_table_13)
+  
+
+model_13.2 <- felm(int_log ~ trat | as.factor(strata),
+                        data = data_table_13)
+
+any_treat <- c(model_13.1$coefficients[1,1], model_13.2$coefficients[1,1])
+
+N <- c(nrow(data_table_13), nrow(data_table_13))
+
+mean_dvar13 <- c(mean(data_table_13$vista_log), mean(data_table_13$vista_log))
+
+table_13_final <- rbind.data.frame(any_treat, N, mean_dvar13)
+
+rownames(table_13_final) <- c("Any Treatment", "N", "Mean of Dependent Variable 
+                              (MXN)")
+
+colnames(table_13_final) <- c("(1) Ln (Checking Account Balance + 1)", "(2) Ln 
+                              (Credit Card Interest + 1")
+
+table13final <- as.matrix(table_13_final)
+
+stargazer(table13final, type = "latex", title = "Treatment Effects on Saving and Borrowing for Individuals in the Top Quartile of Pre-Treatment Checking Account Balances, Who Have a Credit Card")
+
+
+       
+```
+
+
+
+```{r Table 14}
+
+out <- lapply(split(my_data, my_data$strata), 
+              function(dat) lm(vista_log ~ trat, data = dat))
+
+table_14 <- data.frame(purrr::map_dfr(out, tidy))
+
+table_14[,c(3:5)] <- NULL
+
+table_14 <- subset(table_14, term != "(Intercept)")
+
+table_14$term <- c(1,2,3,4,5,6,7,8,9,10)
+
+table_14 <- rename(table_14, "strata" = term)
+
+table14.2data <- inner_join(my_data, table_14, by = "strata")
+
+table14.2data$q2 <- ntile(table14.2data$estimate, n = 4)
+
+table14.2data$lntdc <- log(table14.2data$sdotdc + 1)
+
+table14.2data_final <- table14.2data
+
+table14.2data_final[, c(51, 5, 2, 4, 37)] <- sapply(table14.2data_final[, c(51, 5, 
+                                                                            2, 4, 
+                                                                            37)], 
+                                                    winsorize)
+
+table14.2data_final[,c(2:5,51,6,37)] <-
+  sapply(table14.2data_final[,c(2:5,51,6,37)], 
+         randomize_large_values)
+
+##PANEL A ALL COLUMNS 
+
+
+## panel A Col 1 to 4
+table14.2data_final_c1to4 <- subset(table14.2data_final, q2 == 4)
+
+yvars <- table14.2data_final_c1to4[, c(3,5,51)] 
+# separate out the x and y column for this analysis
+
+
+xvar <- c(table14.2data_final_c1to4[, 6], table14.2data_final_c1to4[,48])
+
+
+out1 <- apply(yvars, 2, function(current_col){
+  
+  lm.out <- broom::tidy(felm(current_col ~ xvar$trat | as.factor(xvar$strata)))
+  
+})
+
+table_14_panel_a_1to4 <- dplyr::bind_rows(out1)
+
+
+##PANEL A Columns 5 : 8
+table14.2data_final_c5to8 <- subset(table14.2data_final, quart == 4)
+
+yvars <- table14.2data_final_c5to8[, c(3,5,51)] 
+# separate out the x and y column for this analysis
+
+
+xvar <- c(table14.2data_final_c5to8[, 6], table14.2data_final_c5to8[,48])
+
+
+out2 <- apply(yvars, 2, function(current_col){
+  
+  lm.out <- broom::tidy(felm(current_col ~ xvar$trat | as.factor(xvar$strata)))
+  
+})
+
+table_14_panel_a_5to8 <- dplyr::bind_rows(out2)
+
+panel_a_coef <- rbind(table_14_panel_a_1to4, table_14_panel_a_5to8)
+
+panel_a_coef[,-c(1:2)] <- NULL
+
+panel_a_coef <- t(panel_a_coef)
+## q2 == 4 already done, no need to subset again 
+table14.x1data <- subset(table14.2data_final, trat == 0 & q2 == 4)
+table14.x2data <- subset(table14.2data, quart == 4 & trat == 0)
+
+means <- c(mean(table14.x1data$vista), 
+           mean(table14.x1data$intereses), mean(table14.x1data$sdotdc), 
+           mean(table14.x2data$vista), mean(table14.x2data$intereses), 
+           mean(table14.x2data$sdotdc))
+
+table_14_panel_a <- rbind(panel_a_coef, means)
+
+
+
+###PANEL B
+## PANEL B Col 1 to 4
+table14.2data_b_1to4 <- subset(table14.2data_final, hastdc == 1 & q2 == 4)
+yvars <- table14.2data_b_1to4[, c(3,5,51)] 
+# separate out the x and y column for this analysis
+
+
+xvar <- c(table14.2data_b_1to4[, 6], table14.2data_b_1to4[,48])
+
+
+out1 <- apply(yvars, 2, function(current_col){
+  
+  lm.out <- broom::tidy(felm(current_col ~ xvar$trat | as.factor(xvar$strata)))
+  
+})
+
+
+table_14_panel_b_1to4 <- dplyr::bind_rows(out1)
+
+
+##PANEL B Columns 5 : 8
+table14.2data_b_5to8 <- subset(table14.2data_final, hastdc == 1 & quart == 4)
+
+yvars <- table14.2data_b_5to8[, c(3,5,51)] 
+# separate out the x and y column for this analysis
+
+
+xvar <- c(table14.2data_b_5to8[, 6], table14.2data_b_5to8[,48])
+
+
+out2 <- apply(yvars, 2, function(current_col){
+  
+  lm.out <- broom::tidy(felm(current_col ~ xvar$trat | as.factor(xvar$strata)))
+  
+})
+
+table_14_panel_b_5to8 <- dplyr::bind_rows(out2)
+
+panel_b_coef <- rbind(table_14_panel_b_1to4, table_14_panel_b_5to8)
+
+panel_b_coef[,-c(1:2)] <- NULL
+
+panel_b_coef <- t(panel_b_coef)
+## q2 == 4 already done, no need to subset again 
+table14.x1data <- subset(table14.2data_final, hastdc = 1 & trat == 0)
+table14.x2data <- subset(table14.2data, hastdc == 1 & quart == 4 & trat == 0)
+
+means <- c(mean(table14.x1data$vista), 
+           mean(table14.x1data$intereses), mean(table14.x1data$sdotdc), 
+           mean(table14.x2data$vista), mean(table14.x2data$intereses), 
+           mean(table14.x2data$sdotdc))
+
+table_14_panel_b <- rbind(panel_b_coef, means)
+
+
+## PANEL C 
+
+#### PANEL C COLS 1 : 4 
+
+table14.2data_c_1to4 <- subset(table14.2data_final, hastdc == 1 & q2 == 4 & 
+                                 binterest > 0)
+yvars <- table14.2data_c_1to4[, c(3,5,51)] 
+# separate out the x and y column for this analysis
+
+
+xvar <- c(table14.2data_c_1to4[, 6], table14.2data_c_1to4[,48])
+
+
+out1 <- apply(yvars, 2, function(current_col){
+  
+  lm.out <- broom::tidy(felm(current_col ~ xvar$trat | as.factor(xvar$strata)))
+  
+})
+
+
+table_14_panel_c_1to4 <- dplyr::bind_rows(out1)
+
+
+##PANEL C Columns 5 : 8
+table14.2data_c_5to8 <- subset(table14.2data_final, binterest > 0 & 
+                                 hastdc == 1 & quart == 4)
+
+yvars <- table14.2data_c_5to8[, c(3,5,51)] 
+# separate out the x and y column for this analysis
+
+
+xvar <- c(table14.2data_c_5to8[, 6], table14.2data_c_5to8[,48])
+
+
+out2 <- apply(yvars, 2, function(current_col){
+  
+  lm.out <- broom::tidy(felm(current_col ~ xvar$trat | as.factor(xvar$strata)))
+  
+})
+
+table_14_panel_c_5to8 <- dplyr::bind_rows(out2)
+
+panel_c_coef <- rbind(table_14_panel_c_1to4, table_14_panel_c_5to8)
+
+panel_c_coef[,-c(1:2)] <- NULL
+
+panel_c_coef <- t(panel_c_coef)
+## q2 == 4 already done, no need to subset again 
+table14.x1data <- subset(table14.2data_final, binterest > 0, 
+                         hastdc = 1 & trat == 0)
+table14.x2data <- subset(table14.2data, hastdc == 1 & quart == 4 & binterest > 0 
+                         & trat == 0)
+
+
+means <- c(mean(table14.x1data$vista), 
+           mean(table14.x1data$intereses), mean(table14.x1data$sdotdc), 
+           mean(table14.x2data$vista), mean(table14.x2data$intereses), 
+           mean(table14.x2data$sdotdc))
+
+table_14_panel_c <- rbind(panel_c_coef, means)
+
+final_table_14 <- rbind(table_14_panel_a, table_14_panel_b, table_14_panel_c)
+
+
+
+final_table_14 <- final_table_14[-c(1,4,7),]
+
+
+N1 <- as.matrix(c(nrow(table14.2data_final_c1to4), " ", nrow(table14.2data_b_1to4), " ", nrow(table14.2data_c_1to4), " "))
+
+N2 <- as.matrix(c(nrow(table14.2data_final_c5to8), " ", nrow(table14.2data_b_5to8), " ", nrow(table14.2data_c_5to8), " "))
+
+final_table_14 <- cbind(N1, final_table_14, N2)
+
+final_table_14 <- final_table_14[,c(1,2,3,4,8,5,6,7)]
+
+
+final_table_14_section1 <- final_table_14[,c(1:4)]
+
+final_table_14_section2 <- final_table_14[,c(5:8)]
+
+rownames(final_table_14_section1) <- c("Panel A: All Clientes ATE",
+                                       "Mean of Dep Var (MXN)",
+                                       "Panel B: Clients with Credit Card ATE", 
+                                       "Mean of Dep Var  (MXN)",
+                                       "Panel C: Clients with Credit Card who paid interest at baseline ATE", 
+                                       "Mean of Dep Var   (MXN)")
+
+
+
+rownames(final_table_14_section2) <- c("Panel A: All Clientes ATE",
+                                       "Mean of Dep Var (MXN)",
+                                       "Panel B: Clients with Credit Card ATE", 
+                                       "Mean of Dep Var  (MXN)",
+                                       "Panel C: Clients with Credit Card who paid interest at baseline ATE", 
+                                       "Mean of Dep Var   (MXN)")
+
+colnames(final_table_14_section1) <- c("N", "Ln Checking Account Balance", 
+                                       "Ln Credit Card Interest",
+                                       "Ln Credit Card Balance (Banorte)")
+
+colnames(final_table_14_section2) <- c("N", "Ln Checking Account Balance",
+                                       "Ln Credit Card Interest", 
+                                       "Ln Credit Card Balance (Banorte)")
+
+
+stargazer(final_table_14_section1, type = "latex", 
+          title = "Observed Average Treatment Effects")
+
+stargazer(final_table_14_section2, type = "latex", 
+          title = "Individual Treatment Effects Predicted by Causal Forest")
+
+
+
+```
+
+
+```{r Table 15}
+#TABLE 15 
+
+
+table_15 <- as.matrix(table(table14.2data$q2, table14.2data$quart))
+
+
+row_1_tot <- sum(table_15[1,])
+row_2_tot <- sum(table_15[2,])
+row_3_tot <- sum(table_15[3,])
+row_4_tot <- sum(table_15[4,])
+
+
+col_1_tot <- sum(table_15[,1])
+col_2_tot <- sum(table_15[,2])
+col_3_tot <- sum(table_15[,3])
+col_4_tot <- sum(table_15[,4])
+
+grand_total <- row_1_tot + row_2_tot + row_3_tot + row_4_tot
+    
+col_5 <- rbind(col_1_tot, col_2_tot, col_3_tot, col_4_tot)    
+
+row_5 <- cbind(row_1_tot, row_2_tot, row_3_tot, row_4_tot, grand_total)
+                          
+table_15 <- cbind(table_15, col_5)
+table_15 <- rbind(table_15, row_5)
+
+
+rownames(table_15) <- c("1", "2", "3", "4", "Total")
+
+colnames(table_15) <- c("1", "2", "3", "4", "Total")
+
+table_15
+
+
+stargazer(table_15, type = "latex", 
+               Title = "Table 15: Distribution of Observations According to the Average Treatment Effect of Strata Blocks and Predicted Treatment Effects at the Individual Level", out = "R tables/Table15.TeX")       
+```
+
